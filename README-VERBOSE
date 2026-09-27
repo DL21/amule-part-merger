@@ -1,0 +1,710 @@
+merge_amule.py
+
+Outil Python permettant de fusionner plusieurs fichiers .part aMule appartenant au même téléchargement, même lorsque ces fichiers proviennent de machines différentes et portent des numéros différents.
+
+Le script utilise les fichiers .part.met associés pour identifier les téléchargements et déterminer précisément quelles zones du fichier sont disponibles ou manquantes.
+
+Principe
+
+aMule stocke un téléchargement incomplet sous la forme de deux fichiers :
+
+xxx.part
+xxx.part.met
+
+
+Le fichier .part contient les données téléchargées.
+
+Le fichier .part.met contient notamment :
+
+le hash ED2K du téléchargement ;
+
+la taille totale du fichier ;
+
+les hashes des chunks ;
+
+les métadonnées du téléchargement ;
+
+les zones encore manquantes du .part.
+
+Deux téléchargements provenant de machines différentes peuvent donc avoir des noms différents :
+
+018.part
+018.part.met
+
+
+et :
+
+057.part
+057.part.met
+
+
+tout en correspondant exactement au même téléchargement.
+
+merge_amule.py se base sur les métadonnées aMule, et non sur le numéro du fichier.
+
+Fonctionnalités
+
+Le script permet notamment de :
+
+fusionner deux ou plusieurs .part ;
+
+détecter automatiquement les .part.met associés ;
+
+vérifier que les fichiers correspondent au même téléchargement ;
+
+comparer le hash ED2K ;
+
+comparer la taille totale ;
+
+comparer les hashes des chunks ;
+
+détecter les gaps de chaque .part ;
+
+récupérer les données présentes dans un seul fichier ;
+
+vérifier que les données communes sont identiques ;
+
+refuser une fusion lorsqu'une zone commune contient des données différentes ;
+
+conserver les zones absentes de toutes les sources comme des gaps ;
+
+générer automatiquement un nouveau .part.met ;
+
+calculer le nombre d'octets réellement disponibles ;
+
+fonctionner avec deux fichiers ou davantage ;
+
+rechercher automatiquement les groupes de téléchargements correspondants.
+
+Précaution fondamentale
+
+Le script ne doit être utilisé qu'avec des fichiers .part correspondant réellement à la même œuvre/téléchargement aMule.
+
+La vérification est effectuée à partir des métadonnées :
+
+Hash ED2K
+Taille
+Hashes des chunks
+Version .met
+
+
+Si ces informations ne correspondent pas, la fusion est refusée.
+
+Le nom du fichier .part n'est pas utilisé pour déterminer l'identité du téléchargement.
+
+Cas typique
+
+Par exemple, deux machines peuvent posséder :
+
+Machine A
+─────────
+018.part
+018.part.met
+
+
+et :
+
+Machine B
+─────────
+042.part
+042.part.met
+
+
+Les numéros 018 et 042 n'ont aucune importance.
+
+Si les .met indiquent le même téléchargement, le script peut les fusionner :
+
+018.part
+042.part
+
+
+pour produire :
+
+resultat.part
+resultat.part.met
+
+Installation
+
+Le script nécessite Python 3.
+
+Vérifier :
+
+python3 --version
+
+
+Rendre le script exécutable :
+
+chmod +x merge_amule.py
+
+
+Puis :
+
+./merge_amule.py
+
+Mode manuel
+
+Il est possible de fournir directement plusieurs .part.
+
+Les .part.met associés sont détectés automatiquement.
+
+Exemple :
+
+./merge_amule.py 018.part 018-1.part --dry-run
+
+
+Le script cherchera automatiquement :
+
+018.part.met
+018-1.part.met
+
+
+Pour trois sources :
+
+./merge_amule.py 018.part 018-1.part 018-2.part --dry-run
+
+Mode automatique
+
+Le mode --auto recherche automatiquement les .part présents dans le dossier courant.
+
+./merge_amule.py --auto --list-only
+
+
+Ce mode ne modifie rien.
+
+Il affiche les groupes de téléchargements détectés.
+
+Exemple :
+
+1 téléchargement(s) distinct(s) détecté(s).
+1 groupe(s) possède(nt) plusieurs .part.
+
+
+Puis :
+
+[1] Nom du téléchargement
+    ED2K : 60a6a7523f8bf989fb374c3e9b419c70
+    Taille : 89 430 016 octets
+    Fichiers : 2
+      - 018.part
+      - 018-1.part
+
+Vérification avant fusion
+
+Il est fortement recommandé de commencer par :
+
+./merge_amule.py --auto --list-only
+
+
+Puis :
+
+./merge_amule.py --auto --dry-run
+
+
+--dry-run effectue les vérifications et simule la fusion, mais ne crée aucun fichier résultat.
+
+C'est la meilleure façon de vérifier que le groupe détecté est celui attendu.
+
+Fusion réelle
+
+Une fois le résultat du --dry-run vérifié :
+
+./merge_amule.py --auto
+
+
+Le script crée alors :
+
+<nom-du-telechargement>-merged.part
+<nom-du-telechargement>-merged.part.met
+
+Choisir le nom du résultat
+
+Avec le mode manuel, on peut utiliser :
+
+./merge_amule.py \
+    018.part \
+    018-1.part \
+    -o test-merge-018
+
+
+Cela produit :
+
+test-merge-018.part
+test-merge-018.part.met
+
+Remplacement d'un résultat existant
+
+Par sécurité, le script refuse d'écraser un résultat existant.
+
+Si :
+
+test-merge-018.part
+
+
+existe déjà, il faut utiliser :
+
+--force
+
+
+Exemple :
+
+./merge_amule.py \
+    018.part \
+    018-1.part \
+    -o test-merge-018 \
+    --force
+
+Comment la fusion fonctionne
+
+Pour chaque zone du fichier, le script détermine quelles sources possèdent réellement les données.
+
+Il existe trois situations.
+
+1. Une seule source possède les données
+
+Exemple :
+
+DEPUIS A : 0 -> 5 672 960
+
+
+Les données sont copiées depuis cette source.
+
+2. Plusieurs sources possèdent les données
+
+Le script compare les données.
+
+Si elles sont identiques :
+
+COMMUN : 9 728 000 -> 38 912 000
+
+
+elles sont considérées comme fiables et une seule copie est conservée.
+
+Si elles sont différentes :
+
+CONFLIT : les fichiers contiennent des données différentes
+
+
+la fusion est annulée.
+
+Le script ne choisit jamais arbitrairement une version.
+
+C'est une protection importante contre une corruption silencieuse.
+
+3. Aucune source ne possède les données
+
+La zone reste absente :
+
+MANQUANT : 68 096 000 -> 77 824 000
+
+
+Elle sera déclarée comme gap dans le nouveau .part.met.
+
+aMule pourra donc continuer à rechercher et télécharger cette partie.
+
+Exemple réel
+
+Pour un fichier de :
+
+89 430 016 octets
+
+
+le script peut obtenir :
+
+Uniquement A        : 5 672 960 octets
+Uniquement B        : 6 353 914 octets
+Communs identiques  : 60 246 016 octets
+Absents de tous     : 17 157 126 octets
+
+
+Les données disponibles sont donc :
+
+72 272 890 / 89 430 016
+
+
+soit :
+
+80.82 %
+
+
+Le nouveau .part.met indiquera alors les trois zones manquantes.
+
+Sécurité de la fusion
+
+Le script prend plusieurs précautions.
+
+Vérification de l'identité
+
+Les fichiers .met doivent avoir :
+
+le même hash ED2K ;
+
+la même taille ;
+
+le même nombre de chunks ;
+
+les mêmes hashes de chunks ;
+
+une version compatible.
+
+Vérification des données
+
+Lorsqu'une zone est présente dans plusieurs .part, les données sont comparées.
+
+Le script refuse une fusion si les copies diffèrent.
+
+Il ne fait donc pas :
+
+A est différent de B
+→ choisir A
+
+
+ou :
+
+A est différent de B
+→ choisir B
+
+
+Il préfère interrompre la fusion plutôt que de produire silencieusement un fichier potentiellement incohérent.
+
+Écriture temporaire
+
+Lors d'une fusion réelle, le nouveau .part est d'abord écrit dans un fichier temporaire.
+
+Le .part.met est également construit temporairement.
+
+Les fichiers définitifs ne sont installés qu'après la réussite de la fusion.
+
+Cela évite autant que possible de laisser un résultat partiellement écrit en cas d'erreur.
+
+Le .part.met généré
+
+Le nouveau .part.met conserve les informations importantes du téléchargement original, notamment :
+
+le hash ED2K ;
+
+la taille totale ;
+
+les hashes des chunks ;
+
+le nom du fichier ;
+
+les autres métadonnées présentes dans le .met source.
+
+Il met à jour :
+
+le nombre d'octets disponibles ;
+
+les gaps du téléchargement.
+
+Les anciens gaps sont supprimés puis remplacés par ceux correspondant au fichier fusionné.
+
+Exemple de vérification du .met
+
+On peut comparer le .met original et le nouveau :
+
+python3 analyse_amule.py \
+    018.part.met \
+    test-merge-018.part.met
+
+
+Les hashes de chunks doivent rester identiques.
+
+La taille totale doit également rester identique.
+
+La valeur correspondant aux données disponibles, elle, doit évoluer.
+
+Par exemple :
+
+Original :
+65015029
+
+Fusionné :
+72272890
+
+
+Cela signifie que la fusion a récupéré :
+
+72 272 890 octets
+
+
+de données exploitables.
+
+Vérifier que le .part n'a pas été modifié
+
+On peut comparer les fichiers avec SHA-256 :
+
+sha256sum resultat.part
+
+
+Pour vérifier que deux résultats sont strictement identiques :
+
+sha256sum 018-merged.part test-merge-018.part
+
+
+Les deux sommes doivent être identiques.
+
+On peut également utiliser :
+
+cmp 018-merged.part test-merge-018.part
+
+
+Si cmp ne produit aucune sortie, les fichiers sont identiques.
+
+Installation dans aMule
+
+Avant toute manipulation dans le répertoire Temp d'aMule :
+
+aMule doit être complètement arrêté.
+
+Vérifier par exemple :
+
+ps aux | grep -i '[a]mule'
+
+
+Aucune instance ne doit apparaître.
+
+Sauvegarde
+
+Avant de remplacer un téléchargement existant, conserver une copie du couple :
+
+xxx.part
+xxx.part.met
+
+
+Par exemple :
+
+mkdir -p ~/.aMule/Temp/backup-018
+
+cp -a \
+    ~/.aMule/Temp/018.part \
+    ~/.aMule/Temp/018.part.met \
+    ~/.aMule/Temp/backup-018/
+
+
+Si d'autres fichiers associés existent, ils peuvent également être sauvegardés.
+
+Installation
+
+Une fois le résultat vérifié :
+
+cp resultat.part ~/.aMule/Temp/018.part
+cp resultat.part.met ~/.aMule/Temp/018.part.met
+
+
+Puis vérifier :
+
+sha256sum \
+    resultat.part \
+    ~/.aMule/Temp/018.part
+
+
+Les deux sommes doivent être identiques.
+
+Pour le .met :
+
+cmp \
+    resultat.part.met \
+    ~/.aMule/Temp/018.part.met
+
+
+Aucune sortie signifie que les fichiers sont identiques.
+
+Après redémarrage d'aMule
+
+aMule doit retrouver le téléchargement avec :
+
+le même hash ED2K ;
+
+la même taille totale ;
+
+les données déjà disponibles ;
+
+les gaps correspondant aux données encore manquantes.
+
+Le téléchargement peut ensuite reprendre normalement afin de récupérer les zones restantes.
+
+Ne supprimez pas immédiatement les sauvegardes originales.
+
+Il est préférable de vérifier d'abord dans aMule que le téléchargement est correctement reconnu.
+
+Fichiers .part sans .part.met
+
+Le script exige actuellement un .part.met associé pour identifier automatiquement un téléchargement.
+
+Par exemple :
+
+018-2.part
+
+
+sans :
+
+018-2.part.met
+
+
+sera signalé :
+
+AVERTISSEMENT : 018-2.part sans .met associé, ignoré.
+
+
+Il n'est volontairement pas attribué automatiquement à un téléchargement.
+
+La raison est simple : sans métadonnées, le script ne dispose pas d'une information suffisamment fiable pour déterminer à quel téléchargement appartient ce .part.
+
+Il est donc préférable de ne pas deviner.
+
+Fichiers générés par le script
+
+Le mode automatique peut rencontrer des fichiers déjà créés par des tests précédents.
+
+Il est recommandé de ne pas considérer ces résultats comme des sources originales.
+
+Par exemple :
+
+018-merged.part
+test-auto-018.part
+test-merge-018.part
+
+
+sont des résultats de fusion et non des copies indépendantes provenant de machines différentes.
+
+Lors des tests, il est préférable de travailler dans un dossier propre ou de conserver clairement les fichiers sources séparés des résultats.
+
+Procédure recommandée
+
+Pour une nouvelle série de fichiers :
+
+1. Placer les .part et .part.met dans un dossier de travail
+Machine A → 018.part + 018.part.met
+Machine B → 057.part + 057.part.met
+Machine C → 003.part + 003.part.met
+
+2. Vérifier les groupes
+./merge_amule.py --auto --list-only
+
+3. Faire une simulation
+./merge_amule.py --auto --dry-run
+
+4. Vérifier le résultat affiché
+
+Contrôler notamment :
+
+Hash ED2K
+Taille
+Sources
+Données disponibles
+Absents de tous
+Gaps
+
+5. Effectuer la fusion
+./merge_amule.py --auto
+
+6. Vérifier le .part obtenu
+sha256sum resultat.part
+
+
+et, si nécessaire :
+
+python3 analyse_amule.py \
+    source.part.met \
+    resultat.part.met
+
+7. Arrêter aMule
+ps aux | grep -i '[a]mule'
+
+8. Sauvegarder l'ancien téléchargement
+
+Conserver au minimum :
+
+ancien.part
+ancien.part.met
+
+9. Installer le nouveau couple
+nouveau.part     → ancien.part
+nouveau.part.met → ancien.part.met
+
+10. Redémarrer aMule et vérifier
+
+Ne supprimer la sauvegarde qu'après avoir vérifié que le téléchargement est correctement reconnu.
+
+Limites
+
+Le script ne peut pas recréer des données qui ne sont présentes dans aucune source.
+
+Si deux machines possèdent exactement les mêmes zones, la fusion ne crée pas de nouvelles données.
+
+Exemple :
+
+A : 70 %
+B : 70 %
+
+
+Si les deux possèdent exactement les mêmes 70 %, le résultat reste :
+
+70 %
+
+
+À l'inverse :
+
+A : 60 %
+B : 60 %
+
+
+avec des zones différentes peut donner :
+
+80 %
+
+
+après fusion.
+
+C'est précisément l'intérêt de cette méthode.
+
+Règle de sécurité principale
+
+Une fusion réussie ne signifie pas que le fichier est complet.
+
+Elle signifie que :
+
+les données disponibles ont été rassemblées ;
+
+les données communes ont été vérifiées ;
+
+les conflits ont été refusés ;
+
+les données absentes restent déclarées comme absentes ;
+
+le .part.met décrit ces informations pour aMule.
+
+Tant que le .part.met et le .part sont conservés ensemble, aMule dispose des informations nécessaires pour continuer le téléchargement.
+
+Exemple minimal
+
+Pour deux machines :
+
+./merge_amule.py --auto --list-only
+
+
+Puis :
+
+./merge_amule.py --auto --dry-run
+
+
+Si le résultat est correct :
+
+./merge_amule.py --auto
+
+
+Le résultat sera un couple :
+
+<nom>-merged.part
+<nom>-merged.part.met
+
+
+Ce couple peut ensuite être installé dans le répertoire Temp d'aMule après arrêt complet d'aMule et sauvegarde de l'ancien couple.
+
+En résumé
+
+merge_amule.py est destiné à rassembler plusieurs copies partielles d'un même téléchargement aMule sans choisir arbitrairement entre des données contradictoires.
+
+Il identifie les téléchargements grâce aux métadonnées aMule, fusionne les zones disponibles, vérifie les zones communes et génère un nouveau .part.met décrivant fidèlement les données obtenues et les données restant à télécharger.
+
+Toujours conserver une sauvegarde des fichiers originaux jusqu'à validation du résultat dans aMule.
